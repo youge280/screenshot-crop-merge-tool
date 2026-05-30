@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hans">
+<html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -624,9 +624,7 @@
     }
 
     function getLanguageCode() {
-      const languages = navigator.languages?.length ? navigator.languages : [navigator.language || ""];
-      const first = languages.map((language) => language.toLowerCase()).find(Boolean) || "";
-      return /^zh-(cn|sg|hans)\b/.test(first) ? "zhHans" : "zhHant";
+      return "zhHant";
     }
 
     function applyLanguage() {

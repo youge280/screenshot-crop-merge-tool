@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>截图区域合并工具</title>
+  <title>截圖區域合併工具</title>
   <style>
     :root {
       color-scheme: light;
@@ -351,43 +351,43 @@
 <body>
   <div class="app">
     <header>
-      <h1 data-i18n="appTitle">截图区域合并工具</h1>
+      <h1 data-i18n="appTitle">截圖區域合併工具</h1>
       <div class="actions">
-        <label class="file-label" for="fileInput" data-i18n="openImage">打开截图</label>
+        <label class="file-label" for="fileInput" data-i18n="openImage">開啟截圖</label>
         <input id="fileInput" class="file-input" type="file" accept="image/*">
-        <button id="pasteBtn" class="btn" type="button" data-i18n="pasteImage">粘贴图片</button>
-        <button id="detectBtn" class="btn" type="button" disabled data-i18n="detectBoxes">识别红框</button>
-        <button id="undoBtn" class="btn" type="button" disabled data-i18n="undo">撤销</button>
+        <button id="pasteBtn" class="btn" type="button" data-i18n="pasteImage">貼上圖片</button>
+        <button id="detectBtn" class="btn" type="button" disabled data-i18n="detectBoxes">辨識紅框</button>
+        <button id="undoBtn" class="btn" type="button" disabled data-i18n="undo">復原</button>
         <button id="clearBtn" class="btn danger" type="button" disabled data-i18n="clear">清空</button>
-        <button id="downloadBtn" class="btn primary" type="button" disabled data-i18n="download">导出 PNG</button>
+        <button id="downloadBtn" class="btn primary" type="button" disabled data-i18n="download">匯出 PNG</button>
       </div>
     </header>
 
     <main>
-      <section class="workspace" aria-label="图片编辑区域" data-i18n-attr="aria-label:workspaceLabel">
+      <section class="workspace" aria-label="圖片編輯區域" data-i18n-attr="aria-label:workspaceLabel">
         <div class="canvas-shell">
           <div id="stage" class="stage" hidden>
-            <img id="sourceImage" alt="待截取的截图" data-i18n-attr="alt:sourceAlt">
+            <img id="sourceImage" alt="待截取的截圖" data-i18n-attr="alt:sourceAlt">
           </div>
           <div id="placeholder" class="placeholder" data-i18n-html="placeholder">
-            打开或直接粘贴一张长截图后，可以手动拖选区域。<br>
-            如果截图里已有红框，点“识别红框”会自动把红框内区域加入合并列表。
+            開啟或直接貼上一張長截圖後，可以手動拖選區域。<br>
+            如果截圖裡已有紅框，點「辨識紅框」會自動把紅框內區域加入合併列表。
           </div>
         </div>
       </section>
 
       <aside>
         <div class="section">
-          <p class="section-title" data-i18n="mergeSettings">合并设置</p>
+          <p class="section-title" data-i18n="mergeSettings">合併設定</p>
           <div class="row">
             <label for="direction" data-i18n="direction">方向</label>
             <select id="direction">
-              <option value="vertical" data-i18n="verticalMerge">上下合并</option>
-              <option value="horizontal" data-i18n="horizontalMerge">左右合并</option>
+              <option value="vertical" data-i18n="verticalMerge">上下合併</option>
+              <option value="horizontal" data-i18n="horizontalMerge">左右合併</option>
             </select>
           </div>
           <div class="row">
-            <label for="gap" data-i18n="gap">间距</label>
+            <label for="gap" data-i18n="gap">間距</label>
             <input id="gap" type="number" min="0" max="200" value="0">
           </div>
           <div class="row">
@@ -397,14 +397,14 @@
         </div>
 
         <div class="section">
-          <p class="section-title" data-i18n="selectedAreas">已选择区域</p>
-          <p class="hint" data-i18n="selectedHint">默认按从上到下合并。可以上移、下移或删除单个区域。</p>
+          <p class="section-title" data-i18n="selectedAreas">已選擇區域</p>
+          <p class="hint" data-i18n="selectedHint">預設按從上到下合併。可以上移、下移或刪除單個區域。</p>
           <div id="status" class="status" role="status" aria-live="polite"></div>
           <div id="selectionList" class="list"></div>
         </div>
 
         <div class="section">
-          <p class="section-title" data-i18n="preview">预览</p>
+          <p class="section-title" data-i18n="preview">預覽</p>
           <div id="preview" class="preview"></div>
         </div>
       </aside>
@@ -626,7 +626,7 @@
     function getLanguageCode() {
       const languages = navigator.languages?.length ? navigator.languages : [navigator.language || ""];
       const first = languages.map((language) => language.toLowerCase()).find(Boolean) || "";
-      return /^zh-(tw|hk|mo|hant)\b/.test(first) ? "zhHant" : "zhHans";
+      return /^zh-(cn|sg|hans)\b/.test(first) ? "zhHans" : "zhHant";
     }
 
     function applyLanguage() {

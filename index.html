@@ -135,7 +135,7 @@
       user-select: none;
     }
 
-    .stage img {
+    .source-image {
       display: block;
       max-width: min(1180px, calc(100vw - 370px));
       height: auto;
@@ -341,7 +341,7 @@
       }
 
       .placeholder,
-      .stage img {
+      .source-image {
         max-width: calc(100vw - 36px);
         width: calc(100vw - 36px);
       }
@@ -354,7 +354,7 @@
       <h1 data-i18n="appTitle">截圖區域合併工具</h1>
       <div class="actions">
         <label class="file-label" for="fileInput" data-i18n="openImage">開啟截圖</label>
-        <input id="fileInput" class="file-input" type="file" accept="image/*">
+        <input id="fileInput" class="file-input" type="file" accept="image/*" multiple>
         <button id="pasteBtn" class="btn" type="button" data-i18n="pasteImage">貼上圖片</button>
         <button id="detectBtn" class="btn" type="button" disabled data-i18n="detectBoxes">辨識紅框</button>
         <button id="undoBtn" class="btn" type="button" disabled data-i18n="undo">復原</button>
@@ -366,9 +366,7 @@
     <main>
       <section class="workspace" aria-label="圖片編輯區域" data-i18n-attr="aria-label:workspaceLabel">
         <div class="canvas-shell">
-          <div id="stage" class="stage" hidden>
-            <img id="sourceImage" alt="待截取的截圖" data-i18n-attr="alt:sourceAlt">
-          </div>
+          <div id="stage" class="stage" hidden></div>
           <div id="placeholder" class="placeholder" data-i18n-html="placeholder">
             開啟或直接貼上一張長截圖後，可以手動拖選區域。<br>
             如果截圖裡已有紅框，點「辨識紅框」會自動把紅框內區域加入合併列表。
@@ -438,8 +436,9 @@
         clipboardDenied: "浏览器没有给读取剪贴板权限，请直接按 Ctrl+V / Command+V。",
         noRedBoxes: "没有识别到明显红框，可以手动拖选区域。",
         detectedBoxes: (count) => `已识别 ${count} 个红框区域。`,
-        imageLoaded: "图片已载入。可以手动框选，或点“识别红框”。",
+        imagesLoaded: (count) => `已载入 ${count} 张图片。可以继续贴图、手动框选，或点“识别红框”。`,
         emptySelections: "还没有选择区域。",
+        sourceLabel: (number) => `第 ${number} 张图`,
         moveUp: "上移",
         moveDown: "下移",
         remove: "删除",
@@ -469,8 +468,9 @@
         clipboardDenied: "瀏覽器沒有給讀取剪貼簿權限，請直接按 Ctrl+V / Command+V。",
         noRedBoxes: "沒有辨識到明顯紅框，可以手動拖選區域。",
         detectedBoxes: (count) => `已辨識 ${count} 個紅框區域。`,
-        imageLoaded: "圖片已載入。可以手動框選，或點「辨識紅框」。",
+        imagesLoaded: (count) => `已載入 ${count} 張圖片。可以繼續貼圖、手動框選，或點「辨識紅框」。`,
         emptySelections: "還沒有選擇區域。",
+        sourceLabel: (number) => `第 ${number} 張圖`,
         moveUp: "上移",
         moveDown: "下移",
         remove: "刪除",
@@ -481,7 +481,6 @@
     const t = translations[languageCode];
     const fileInput = document.querySelector("#fileInput");
     const stage = document.querySelector("#stage");
-    const sourceImage = document.querySelector("#sourceImage");
     const placeholder = document.querySelector("#placeholder");
     const selectionList = document.querySelector("#selectionList");
     const preview = document.querySelector("#preview");
@@ -495,9 +494,7 @@
     const bgColor = document.querySelector("#bgColor");
     const status = document.querySelector("#status");
 
-    let imageLoaded = false;
-    let naturalWidth = 0;
-    let naturalHeight = 0;
+    let sources = [];
     let selections = [];
     let dragStart = null;
     let drawingBox = null;
@@ -506,9 +503,8 @@
     applyLanguage();
 
     fileInput.addEventListener("change", (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      loadImage(file);
+      const files = [...event.target.files || []].filter((file) => file.type.startsWith("image/"));
+      files.forEach(loadImage);
       fileInput.value = "";
     });
 
@@ -554,10 +550,11 @@
     });
 
     stage.addEventListener("pointerdown", (event) => {
-      if (!imageLoaded || event.button !== 0) return;
+      if (!sources.length || event.button !== 0) return;
       event.preventDefault();
       stage.setPointerCapture(event.pointerId);
       dragStart = getImagePoint(event);
+      if (!dragStart) return;
       drawingBox = document.createElement("div");
       drawingBox.className = "drawing";
       stage.appendChild(drawingBox);
@@ -577,7 +574,7 @@
       drawingBox = null;
       dragStart = null;
 
-      if (rect.width >= 8 && rect.height >= 8) {
+      if (rect && rect.width >= 8 && rect.height >= 8) {
         selections.push(rect);
         render();
       }
@@ -589,7 +586,12 @@
     });
 
     clearBtn.addEventListener("click", () => {
+      sources = [];
       selections = [];
+      stage.innerHTML = "";
+      placeholder.hidden = false;
+      stage.hidden = true;
+      setStatus("");
       render();
     });
 
@@ -609,18 +611,23 @@
 
     function loadImage(file) {
       const url = URL.createObjectURL(file);
-      sourceImage.onload = () => {
-        naturalWidth = sourceImage.naturalWidth;
-        naturalHeight = sourceImage.naturalHeight;
-        imageLoaded = true;
-        selections = [];
+      const image = new Image();
+      image.className = "source-image";
+      image.alt = t.sourceAlt;
+      image.onload = () => {
+        sources.push({
+          image,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+        });
         placeholder.hidden = true;
         stage.hidden = false;
         URL.revokeObjectURL(url);
-        setStatus(t.imageLoaded);
+        stage.appendChild(image);
+        setStatus(t.imagesLoaded(sources.length));
         render();
       };
-      sourceImage.src = url;
+      image.src = url;
     }
 
     function getLanguageCode() {
@@ -648,19 +655,35 @@
     }
 
     function getImagePoint(event) {
-      const bounds = sourceImage.getBoundingClientRect();
+      const sourceIndex = findSourceIndex(event);
+      if (sourceIndex < 0) return null;
+      const source = sources[sourceIndex];
+      const bounds = source.image.getBoundingClientRect();
       const x = clamp(event.clientX - bounds.left, 0, bounds.width);
       const y = clamp(event.clientY - bounds.top, 0, bounds.height);
       return {
-        x: Math.round((x / bounds.width) * naturalWidth),
-        y: Math.round((y / bounds.height) * naturalHeight),
+        sourceIndex,
+        x: Math.round((x / bounds.width) * source.naturalWidth),
+        y: Math.round((y / bounds.height) * source.naturalHeight),
       };
     }
 
+    function findSourceIndex(event) {
+      return sources.findIndex((source) => {
+        const bounds = source.image.getBoundingClientRect();
+        return event.clientX >= bounds.left &&
+          event.clientX <= bounds.right &&
+          event.clientY >= bounds.top &&
+          event.clientY <= bounds.bottom;
+      });
+    }
+
     function normalizeRect(a, b) {
+      if (!a || !b || a.sourceIndex !== b.sourceIndex) return null;
       const x = Math.min(a.x, b.x);
       const y = Math.min(a.y, b.y);
       return {
+        sourceIndex: a.sourceIndex,
         x,
         y,
         width: Math.abs(a.x - b.x),
@@ -671,25 +694,28 @@
     function updateDrawing(event) {
       const end = getImagePoint(event);
       const rect = normalizeRect(dragStart, end);
+      if (!rect) return;
       setBoxStyle(drawingBox, rect);
     }
 
     function setBoxStyle(box, rect) {
-      const displayWidth = sourceImage.clientWidth;
-      const displayHeight = sourceImage.clientHeight;
-      box.style.left = `${(rect.x / naturalWidth) * displayWidth}px`;
-      box.style.top = `${(rect.y / naturalHeight) * displayHeight}px`;
-      box.style.width = `${(rect.width / naturalWidth) * displayWidth}px`;
-      box.style.height = `${(rect.height / naturalHeight) * displayHeight}px`;
+      const source = sources[rect.sourceIndex];
+      if (!source) return;
+      const displayWidth = source.image.clientWidth;
+      const displayHeight = source.image.clientHeight;
+      box.style.left = `${source.image.offsetLeft + (rect.x / source.naturalWidth) * displayWidth}px`;
+      box.style.top = `${source.image.offsetTop + (rect.y / source.naturalHeight) * displayHeight}px`;
+      box.style.width = `${(rect.width / source.naturalWidth) * displayWidth}px`;
+      box.style.height = `${(rect.height / source.naturalHeight) * displayHeight}px`;
     }
 
     function render() {
       renderSelections();
       renderList();
       renderPreview();
-      detectBtn.disabled = !imageLoaded;
+      detectBtn.disabled = !sources.length;
       undoBtn.disabled = selections.length === 0;
-      clearBtn.disabled = selections.length === 0;
+      clearBtn.disabled = selections.length === 0 && sources.length === 0;
       downloadBtn.disabled = selections.length === 0;
     }
 
@@ -724,7 +750,7 @@
 
         const meta = document.createElement("div");
         meta.className = "meta";
-        meta.textContent = `x ${rect.x}, y ${rect.y}, ${rect.width} x ${rect.height}`;
+        meta.textContent = `${t.sourceLabel(rect.sourceIndex + 1)} · x ${rect.x}, y ${rect.y}, ${rect.width} x ${rect.height}`;
 
         const actions = document.createElement("div");
         actions.className = "item-actions";
@@ -762,85 +788,92 @@
     }
 
     function detectRedBoxes() {
-      if (!imageLoaded) return [];
+      if (!sources.length) return [];
 
-      const canvas = document.createElement("canvas");
-      canvas.width = naturalWidth;
-      canvas.height = naturalHeight;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      ctx.drawImage(sourceImage, 0, 0, naturalWidth, naturalHeight);
+      const allBoxes = [];
 
-      const { data } = ctx.getImageData(0, 0, naturalWidth, naturalHeight);
-      const total = naturalWidth * naturalHeight;
-      const red = new Uint8Array(total);
-      const visited = new Uint8Array(total);
+      sources.forEach((source, sourceIndex) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = source.naturalWidth;
+        canvas.height = source.naturalHeight;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(source.image, 0, 0, source.naturalWidth, source.naturalHeight);
 
-      for (let i = 0, p = 0; i < total; i += 1, p += 4) {
-        const r = data[p];
-        const g = data[p + 1];
-        const b = data[p + 2];
-        red[i] = r > 180 && g < 120 && b < 130 && r - g > 55 && r - b > 45 ? 1 : 0;
-      }
+        const { data } = ctx.getImageData(0, 0, source.naturalWidth, source.naturalHeight);
+        const total = source.naturalWidth * source.naturalHeight;
+        const red = new Uint8Array(total);
+        const visited = new Uint8Array(total);
 
-      const boxes = [];
-      const queue = [];
-
-      for (let i = 0; i < total; i += 1) {
-        if (!red[i] || visited[i]) continue;
-
-        let head = 0;
-        let count = 0;
-        let minX = naturalWidth;
-        let minY = naturalHeight;
-        let maxX = 0;
-        let maxY = 0;
-        visited[i] = 1;
-        queue.length = 0;
-        queue.push(i);
-
-        while (head < queue.length) {
-          const current = queue[head++];
-          const x = current % naturalWidth;
-          const y = Math.floor(current / naturalWidth);
-          count += 1;
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-
-          visitRedNeighbor(current - 1, x > 0);
-          visitRedNeighbor(current + 1, x < naturalWidth - 1);
-          visitRedNeighbor(current - naturalWidth, y > 0);
-          visitRedNeighbor(current + naturalWidth, y < naturalHeight - 1);
+        for (let i = 0, p = 0; i < total; i += 1, p += 4) {
+          const r = data[p];
+          const g = data[p + 1];
+          const b = data[p + 2];
+          red[i] = r > 180 && g < 120 && b < 130 && r - g > 55 && r - b > 45 ? 1 : 0;
         }
 
-        const width = maxX - minX + 1;
-        const height = maxY - minY + 1;
-        const density = count / (width * height);
-        const minSize = Math.min(naturalWidth, naturalHeight) * 0.035;
+        const boxes = [];
+        const queue = [];
 
-        if (width >= minSize && height >= minSize && count >= 80 && density < 0.28) {
-          boxes.push(makeCropFromDetectedBox({ minX, minY, maxX, maxY }));
+        for (let i = 0; i < total; i += 1) {
+          if (!red[i] || visited[i]) continue;
+
+          let head = 0;
+          let count = 0;
+          let minX = source.naturalWidth;
+          let minY = source.naturalHeight;
+          let maxX = 0;
+          let maxY = 0;
+          visited[i] = 1;
+          queue.length = 0;
+          queue.push(i);
+
+          while (head < queue.length) {
+            const current = queue[head++];
+            const x = current % source.naturalWidth;
+            const y = Math.floor(current / source.naturalWidth);
+            count += 1;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+
+            visitRedNeighbor(current - 1, x > 0);
+            visitRedNeighbor(current + 1, x < source.naturalWidth - 1);
+            visitRedNeighbor(current - source.naturalWidth, y > 0);
+            visitRedNeighbor(current + source.naturalWidth, y < source.naturalHeight - 1);
+          }
+
+          const width = maxX - minX + 1;
+          const height = maxY - minY + 1;
+          const density = count / (width * height);
+          const minSize = Math.min(source.naturalWidth, source.naturalHeight) * 0.035;
+
+          if (width >= minSize && height >= minSize && count >= 80 && density < 0.28) {
+            boxes.push(makeCropFromDetectedBox({ minX, minY, maxX, maxY }, sourceIndex));
+          }
         }
-      }
 
-      return mergeSimilarBoxes(boxes)
-        .sort((a, b) => a.y - b.y || a.x - b.x);
+        allBoxes.push(...mergeSimilarBoxes(boxes));
 
-      function visitRedNeighbor(next, inBounds) {
-        if (!inBounds || !red[next] || visited[next]) return;
-        visited[next] = 1;
-        queue.push(next);
-      }
+        function visitRedNeighbor(next, inBounds) {
+          if (!inBounds || !red[next] || visited[next]) return;
+          visited[next] = 1;
+          queue.push(next);
+        }
+      });
+
+      return allBoxes.sort((a, b) => a.sourceIndex - b.sourceIndex || a.y - b.y || a.x - b.x);
     }
 
-    function makeCropFromDetectedBox(box) {
+    function makeCropFromDetectedBox(box, sourceIndex) {
+      const source = sources[sourceIndex];
       const inset = 6;
-      const x = clamp(box.minX + inset, 0, naturalWidth - 1);
-      const y = clamp(box.minY + inset, 0, naturalHeight - 1);
-      const right = clamp(box.maxX - inset, x + 1, naturalWidth);
-      const bottom = clamp(box.maxY - inset, y + 1, naturalHeight);
+      const x = clamp(box.minX + inset, 0, source.naturalWidth - 1);
+      const y = clamp(box.minY + inset, 0, source.naturalHeight - 1);
+      const right = clamp(box.maxX - inset, x + 1, source.naturalWidth);
+      const bottom = clamp(box.maxY - inset, y + 1, source.naturalHeight);
       return {
+        sourceIndex,
         x,
         y,
         width: right - x,
@@ -873,16 +906,17 @@
     }
 
     function buildOutputCanvas() {
-      if (!imageLoaded || !selections.length) return null;
+      const validSelections = selections.filter((rect) => sources[rect.sourceIndex]);
+      if (!sources.length || !validSelections.length) return null;
 
       const gap = clamp(Number(gapInput.value) || 0, 0, 200);
       const vertical = direction.value === "vertical";
       const width = vertical
-        ? Math.max(...selections.map((rect) => rect.width))
-        : selections.reduce((sum, rect) => sum + rect.width, 0) + gap * (selections.length - 1);
+        ? Math.max(...validSelections.map((rect) => rect.width))
+        : validSelections.reduce((sum, rect) => sum + rect.width, 0) + gap * (validSelections.length - 1);
       const height = vertical
-        ? selections.reduce((sum, rect) => sum + rect.height, 0) + gap * (selections.length - 1)
-        : Math.max(...selections.map((rect) => rect.height));
+        ? validSelections.reduce((sum, rect) => sum + rect.height, 0) + gap * (validSelections.length - 1)
+        : Math.max(...validSelections.map((rect) => rect.height));
 
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, width);
@@ -892,12 +926,13 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       let offset = 0;
-      selections.forEach((rect) => {
+      validSelections.forEach((rect) => {
+        const source = sources[rect.sourceIndex];
         if (vertical) {
-          ctx.drawImage(sourceImage, rect.x, rect.y, rect.width, rect.height, 0, offset, rect.width, rect.height);
+          ctx.drawImage(source.image, rect.x, rect.y, rect.width, rect.height, 0, offset, rect.width, rect.height);
           offset += rect.height + gap;
         } else {
-          ctx.drawImage(sourceImage, rect.x, rect.y, rect.width, rect.height, offset, 0, rect.width, rect.height);
+          ctx.drawImage(source.image, rect.x, rect.y, rect.width, rect.height, offset, 0, rect.width, rect.height);
           offset += rect.width + gap;
         }
       });

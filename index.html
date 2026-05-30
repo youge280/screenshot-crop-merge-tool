@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>截图区域合并工具</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #202832;
+      --muted: #66717f;
+      --line: #d8dee6;
+      --accent: #e63d43;
+      --accent-dark: #bf252d;
+      --blue: #276ef1;
+      --shadow: 0 10px 28px rgba(24, 34, 45, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .btn,
+    .file-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .danger {
+      border-color: #ffd1d4;
+      color: var(--accent-dark);
+    }
+
+    .file-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      min-height: 0;
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      padding: 18px;
+    }
+
+    .canvas-shell {
+      position: relative;
+      width: max-content;
+      min-width: 100%;
+      min-height: 68vh;
+      display: grid;
+      place-items: start center;
+    }
+
+    .stage {
+      position: relative;
+      display: inline-block;
+      background: #fff;
+      box-shadow: var(--shadow);
+      line-height: 0;
+      user-select: none;
+    }
+
+    .stage img {
+      display: block;
+      max-width: min(1180px, calc(100vw - 370px));
+      height: auto;
+      pointer-events: none;
+    }
+
+    .placeholder {
+      width: min(820px, calc(100vw - 360px));
+      min-height: 430px;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background: #fff;
+      border: 1px dashed #b9c2ce;
+      border-radius: 8px;
+      color: var(--muted);
+      line-height: 1.75;
+      text-align: center;
+    }
+
+    .selection {
+      position: absolute;
+      border: 3px solid var(--accent);
+      background: rgba(230, 61, 67, 0.08);
+      pointer-events: none;
+    }
+
+    .selection::before {
+      content: attr(data-index);
+      position: absolute;
+      top: -29px;
+      left: -3px;
+      min-width: 28px;
+      height: 26px;
+      padding: 0 8px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 1;
+      border-radius: 5px 5px 0 0;
+    }
+
+    .drawing {
+      position: absolute;
+      border: 3px dashed var(--blue);
+      background: rgba(39, 110, 241, 0.08);
+      pointer-events: none;
+    }
+
+    aside {
+      min-height: 0;
+      overflow: auto;
+      padding: 16px;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+    }
+
+    .section {
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section:last-child {
+      border-bottom: 0;
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .status {
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .status.error {
+      color: var(--accent-dark);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .row label {
+      min-width: 72px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .row input,
+    .row select {
+      min-width: 0;
+      width: 100%;
+      height: 34px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .badge {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .meta {
+      min-width: 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .item-actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .mini {
+      min-height: 30px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fff;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .preview {
+      width: 100%;
+      min-height: 140px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafc;
+      overflow: auto;
+    }
+
+    .preview canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      background: #fff;
+    }
+
+    @media (max-width: 860px) {
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .placeholder,
+      .stage img {
+        max-width: calc(100vw - 36px);
+        width: calc(100vw - 36px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1 data-i18n="appTitle">截图区域合并工具</h1>
+      <div class="actions">
+        <label class="file-label" for="fileInput" data-i18n="openImage">打开截图</label>
+        <input id="fileInput" class="file-input" type="file" accept="image/*">
+        <button id="pasteBtn" class="btn" type="button" data-i18n="pasteImage">粘贴图片</button>
+        <button id="detectBtn" class="btn" type="button" disabled data-i18n="detectBoxes">识别红框</button>
+        <button id="undoBtn" class="btn" type="button" disabled data-i18n="undo">撤销</button>
+        <button id="clearBtn" class="btn danger" type="button" disabled data-i18n="clear">清空</button>
+        <button id="downloadBtn" class="btn primary" type="button" disabled data-i18n="download">导出 PNG</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="workspace" aria-label="图片编辑区域" data-i18n-attr="aria-label:workspaceLabel">
+        <div class="canvas-shell">
+          <div id="stage" class="stage" hidden>
+            <img id="sourceImage" alt="待截取的截图" data-i18n-attr="alt:sourceAlt">
+          </div>
+          <div id="placeholder" class="placeholder" data-i18n-html="placeholder">
+            打开或直接粘贴一张长截图后，可以手动拖选区域。<br>
+            如果截图里已有红框，点“识别红框”会自动把红框内区域加入合并列表。
+          </div>
+        </div>
+      </section>
+
+      <aside>
+        <div class="section">
+          <p class="section-title" data-i18n="mergeSettings">合并设置</p>
+          <div class="row">
+            <label for="direction" data-i18n="direction">方向</label>
+            <select id="direction">
+              <option value="vertical" data-i18n="verticalMerge">上下合并</option>
+              <option value="horizontal" data-i18n="horizontalMerge">左右合并</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="gap" data-i18n="gap">间距</label>
+            <input id="gap" type="number" min="0" max="200" value="0">
+          </div>
+          <div class="row">
+            <label for="bgColor" data-i18n="bgColor">背景色</label>
+            <input id="bgColor" type="color" value="#ffffff">
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="section-title" data-i18n="selectedAreas">已选择区域</p>
+          <p class="hint" data-i18n="selectedHint">默认按从上到下合并。可以上移、下移或删除单个区域。</p>
+          <div id="status" class="status" role="status" aria-live="polite"></div>
+          <div id="selectionList" class="list"></div>
+        </div>
+
+        <div class="section">
+          <p class="section-title" data-i18n="preview">预览</p>
+          <div id="preview" class="preview"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const translations = {
+      zhHans: {
+        appTitle: "截图区域合并工具",
+        openImage: "打开截图",
+        pasteImage: "粘贴图片",
+        detectBoxes: "识别红框",
+        undo: "撤销",
+        clear: "清空",
+        download: "导出 PNG",
+        workspaceLabel: "图片编辑区域",
+        sourceAlt: "待截取的截图",
+        placeholder: "打开或直接粘贴一张长截图后，可以手动拖选区域。<br>如果截图里已有红框，点“识别红框”会自动把红框内区域加入合并列表。",
+        mergeSettings: "合并设置",
+        direction: "方向",
+        verticalMerge: "上下合并",
+        horizontalMerge: "左右合并",
+        gap: "间距",
+        bgColor: "背景色",
+        selectedAreas: "已选择区域",
+        selectedHint: "默认按从上到下合并。可以上移、下移或删除单个区域。",
+        preview: "预览",
+        pasteReady: "可以直接按 Ctrl+V / Command+V 粘贴截图。",
+        noClipboardImage: "剪贴板里没有图片。",
+        clipboardDenied: "浏览器没有给读取剪贴板权限，请直接按 Ctrl+V / Command+V。",
+        noRedBoxes: "没有识别到明显红框，可以手动拖选区域。",
+        detectedBoxes: (count) => `已识别 ${count} 个红框区域。`,
+        imageLoaded: "图片已载入。可以手动框选，或点“识别红框”。",
+        emptySelections: "还没有选择区域。",
+        moveUp: "上移",
+        moveDown: "下移",
+        remove: "删除",
+      },
+      zhHant: {
+        appTitle: "截圖區域合併工具",
+        openImage: "開啟截圖",
+        pasteImage: "貼上圖片",
+        detectBoxes: "辨識紅框",
+        undo: "復原",
+        clear: "清空",
+        download: "匯出 PNG",
+        workspaceLabel: "圖片編輯區域",
+        sourceAlt: "待截取的截圖",
+        placeholder: "開啟或直接貼上一張長截圖後，可以手動拖選區域。<br>如果截圖裡已有紅框，點「辨識紅框」會自動把紅框內區域加入合併列表。",
+        mergeSettings: "合併設定",
+        direction: "方向",
+        verticalMerge: "上下合併",
+        horizontalMerge: "左右合併",
+        gap: "間距",
+        bgColor: "背景色",
+        selectedAreas: "已選擇區域",
+        selectedHint: "預設按從上到下合併。可以上移、下移或刪除單個區域。",
+        preview: "預覽",
+        pasteReady: "可以直接按 Ctrl+V / Command+V 貼上截圖。",
+        noClipboardImage: "剪貼簿裡沒有圖片。",
+        clipboardDenied: "瀏覽器沒有給讀取剪貼簿權限，請直接按 Ctrl+V / Command+V。",
+        noRedBoxes: "沒有辨識到明顯紅框，可以手動拖選區域。",
+        detectedBoxes: (count) => `已辨識 ${count} 個紅框區域。`,
+        imageLoaded: "圖片已載入。可以手動框選，或點「辨識紅框」。",
+        emptySelections: "還沒有選擇區域。",
+        moveUp: "上移",
+        moveDown: "下移",
+        remove: "刪除",
+      },
+    };
+
+    const languageCode = getLanguageCode();
+    const t = translations[languageCode];
+    const fileInput = document.querySelector("#fileInput");
+    const stage = document.querySelector("#stage");
+    const sourceImage = document.querySelector("#sourceImage");
+    const placeholder = document.querySelector("#placeholder");
+    const selectionList = document.querySelector("#selectionList");
+    const preview = document.querySelector("#preview");
+    const pasteBtn = document.querySelector("#pasteBtn");
+    const detectBtn = document.querySelector("#detectBtn");
+    const undoBtn = document.querySelector("#undoBtn");
+    const clearBtn = document.querySelector("#clearBtn");
+    const downloadBtn = document.querySelector("#downloadBtn");
+    const direction = document.querySelector("#direction");
+    const gapInput = document.querySelector("#gap");
+    const bgColor = document.querySelector("#bgColor");
+    const status = document.querySelector("#status");
+
+    let imageLoaded = false;
+    let naturalWidth = 0;
+    let naturalHeight = 0;
+    let selections = [];
+    let dragStart = null;
+    let drawingBox = null;
+    let outputCanvas = null;
+
+    applyLanguage();
+
+    fileInput.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      loadImage(file);
+      fileInput.value = "";
+    });
+
+    pasteBtn.addEventListener("click", async () => {
+      setStatus(t.pasteReady);
+
+      if (!navigator.clipboard?.read) return;
+
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find((type) => type.startsWith("image/"));
+          if (imageType) {
+            loadImage(await item.getType(imageType));
+            return;
+          }
+        }
+        setStatus(t.noClipboardImage, true);
+      } catch {
+        setStatus(t.clipboardDenied, true);
+      }
+    });
+
+    document.addEventListener("paste", (event) => {
+      const file = [...event.clipboardData?.items || []]
+        .find((item) => item.type.startsWith("image/"))
+        ?.getAsFile();
+      if (!file) return;
+      event.preventDefault();
+      loadImage(file);
+    });
+
+    detectBtn.addEventListener("click", () => {
+      const detected = detectRedBoxes();
+      if (!detected.length) {
+        setStatus(t.noRedBoxes, true);
+        return;
+      }
+
+      selections = detected;
+      setStatus(t.detectedBoxes(detected.length));
+      render();
+    });
+
+    stage.addEventListener("pointerdown", (event) => {
+      if (!imageLoaded || event.button !== 0) return;
+      event.preventDefault();
+      stage.setPointerCapture(event.pointerId);
+      dragStart = getImagePoint(event);
+      drawingBox = document.createElement("div");
+      drawingBox.className = "drawing";
+      stage.appendChild(drawingBox);
+      updateDrawing(event);
+    });
+
+    stage.addEventListener("pointermove", (event) => {
+      if (!dragStart || !drawingBox) return;
+      updateDrawing(event);
+    });
+
+    stage.addEventListener("pointerup", (event) => {
+      if (!dragStart || !drawingBox) return;
+      const end = getImagePoint(event);
+      const rect = normalizeRect(dragStart, end);
+      drawingBox.remove();
+      drawingBox = null;
+      dragStart = null;
+
+      if (rect.width >= 8 && rect.height >= 8) {
+        selections.push(rect);
+        render();
+      }
+    });
+
+    undoBtn.addEventListener("click", () => {
+      selections.pop();
+      render();
+    });
+
+    clearBtn.addEventListener("click", () => {
+      selections = [];
+      render();
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      outputCanvas = buildOutputCanvas();
+      if (!outputCanvas) return;
+
+      const link = document.createElement("a");
+      link.download = "merged-crops.png";
+      link.href = outputCanvas.toDataURL("image/png");
+      link.click();
+    });
+
+    direction.addEventListener("change", renderPreview);
+    gapInput.addEventListener("input", renderPreview);
+    bgColor.addEventListener("input", renderPreview);
+
+    function loadImage(file) {
+      const url = URL.createObjectURL(file);
+      sourceImage.onload = () => {
+        naturalWidth = sourceImage.naturalWidth;
+        naturalHeight = sourceImage.naturalHeight;
+        imageLoaded = true;
+        selections = [];
+        placeholder.hidden = true;
+        stage.hidden = false;
+        URL.revokeObjectURL(url);
+        setStatus(t.imageLoaded);
+        render();
+      };
+      sourceImage.src = url;
+    }
+
+    function getLanguageCode() {
+      const languages = navigator.languages?.length ? navigator.languages : [navigator.language || ""];
+      const first = languages.map((language) => language.toLowerCase()).find(Boolean) || "";
+      return /^zh-(tw|hk|mo|hant)\b/.test(first) ? "zhHant" : "zhHans";
+    }
+
+    function applyLanguage() {
+      document.documentElement.lang = languageCode === "zhHant" ? "zh-Hant" : "zh-Hans";
+      document.title = t.appTitle;
+
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        node.textContent = t[node.dataset.i18n];
+      });
+
+      document.querySelectorAll("[data-i18n-html]").forEach((node) => {
+        node.innerHTML = t[node.dataset.i18nHtml];
+      });
+
+      document.querySelectorAll("[data-i18n-attr]").forEach((node) => {
+        node.dataset.i18nAttr.split(";").forEach((pair) => {
+          const [attr, key] = pair.split(":");
+          node.setAttribute(attr, t[key]);
+        });
+      });
+    }
+
+    function getImagePoint(event) {
+      const bounds = sourceImage.getBoundingClientRect();
+      const x = clamp(event.clientX - bounds.left, 0, bounds.width);
+      const y = clamp(event.clientY - bounds.top, 0, bounds.height);
+      return {
+        x: Math.round((x / bounds.width) * naturalWidth),
+        y: Math.round((y / bounds.height) * naturalHeight),
+      };
+    }
+
+    function normalizeRect(a, b) {
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      return {
+        x,
+        y,
+        width: Math.abs(a.x - b.x),
+        height: Math.abs(a.y - b.y),
+      };
+    }
+
+    function updateDrawing(event) {
+      const end = getImagePoint(event);
+      const rect = normalizeRect(dragStart, end);
+      setBoxStyle(drawingBox, rect);
+    }
+
+    function setBoxStyle(box, rect) {
+      const displayWidth = sourceImage.clientWidth;
+      const displayHeight = sourceImage.clientHeight;
+      box.style.left = `${(rect.x / naturalWidth) * displayWidth}px`;
+      box.style.top = `${(rect.y / naturalHeight) * displayHeight}px`;
+      box.style.width = `${(rect.width / naturalWidth) * displayWidth}px`;
+      box.style.height = `${(rect.height / naturalHeight) * displayHeight}px`;
+    }
+
+    function render() {
+      renderSelections();
+      renderList();
+      renderPreview();
+      detectBtn.disabled = !imageLoaded;
+      undoBtn.disabled = selections.length === 0;
+      clearBtn.disabled = selections.length === 0;
+      downloadBtn.disabled = selections.length === 0;
+    }
+
+    function renderSelections() {
+      stage.querySelectorAll(".selection").forEach((node) => node.remove());
+      selections.forEach((rect, index) => {
+        const box = document.createElement("div");
+        box.className = "selection";
+        box.dataset.index = index + 1;
+        setBoxStyle(box, rect);
+        stage.appendChild(box);
+      });
+    }
+
+    function renderList() {
+      selectionList.innerHTML = "";
+      if (!selections.length) {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = t.emptySelections;
+        selectionList.appendChild(empty);
+        return;
+      }
+
+      selections.forEach((rect, index) => {
+        const item = document.createElement("div");
+        item.className = "item";
+
+        const badge = document.createElement("div");
+        badge.className = "badge";
+        badge.textContent = index + 1;
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = `x ${rect.x}, y ${rect.y}, ${rect.width} x ${rect.height}`;
+
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+        actions.append(
+          makeItemButton(t.moveUp, () => moveSelection(index, -1), index === 0),
+          makeItemButton(t.moveDown, () => moveSelection(index, 1), index === selections.length - 1),
+          makeItemButton(t.remove, () => removeSelection(index), false)
+        );
+
+        item.append(badge, meta, actions);
+        selectionList.appendChild(item);
+      });
+    }
+
+    function makeItemButton(text, onClick, disabled) {
+      const button = document.createElement("button");
+      button.className = "mini";
+      button.type = "button";
+      button.textContent = text;
+      button.disabled = disabled;
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    function moveSelection(index, delta) {
+      const next = index + delta;
+      if (next < 0 || next >= selections.length) return;
+      [selections[index], selections[next]] = [selections[next], selections[index]];
+      render();
+    }
+
+    function removeSelection(index) {
+      selections.splice(index, 1);
+      render();
+    }
+
+    function detectRedBoxes() {
+      if (!imageLoaded) return [];
+
+      const canvas = document.createElement("canvas");
+      canvas.width = naturalWidth;
+      canvas.height = naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(sourceImage, 0, 0, naturalWidth, naturalHeight);
+
+      const { data } = ctx.getImageData(0, 0, naturalWidth, naturalHeight);
+      const total = naturalWidth * naturalHeight;
+      const red = new Uint8Array(total);
+      const visited = new Uint8Array(total);
+
+      for (let i = 0, p = 0; i < total; i += 1, p += 4) {
+        const r = data[p];
+        const g = data[p + 1];
+        const b = data[p + 2];
+        red[i] = r > 180 && g < 120 && b < 130 && r - g > 55 && r - b > 45 ? 1 : 0;
+      }
+
+      const boxes = [];
+      const queue = [];
+
+      for (let i = 0; i < total; i += 1) {
+        if (!red[i] || visited[i]) continue;
+
+        let head = 0;
+        let count = 0;
+        let minX = naturalWidth;
+        let minY = naturalHeight;
+        let maxX = 0;
+        let maxY = 0;
+        visited[i] = 1;
+        queue.length = 0;
+        queue.push(i);
+
+        while (head < queue.length) {
+          const current = queue[head++];
+          const x = current % naturalWidth;
+          const y = Math.floor(current / naturalWidth);
+          count += 1;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+
+          visitRedNeighbor(current - 1, x > 0);
+          visitRedNeighbor(current + 1, x < naturalWidth - 1);
+          visitRedNeighbor(current - naturalWidth, y > 0);
+          visitRedNeighbor(current + naturalWidth, y < naturalHeight - 1);
+        }
+
+        const width = maxX - minX + 1;
+        const height = maxY - minY + 1;
+        const density = count / (width * height);
+        const minSize = Math.min(naturalWidth, naturalHeight) * 0.035;
+
+        if (width >= minSize && height >= minSize && count >= 80 && density < 0.28) {
+          boxes.push(makeCropFromDetectedBox({ minX, minY, maxX, maxY }));
+        }
+      }
+
+      return mergeSimilarBoxes(boxes)
+        .sort((a, b) => a.y - b.y || a.x - b.x);
+
+      function visitRedNeighbor(next, inBounds) {
+        if (!inBounds || !red[next] || visited[next]) return;
+        visited[next] = 1;
+        queue.push(next);
+      }
+    }
+
+    function makeCropFromDetectedBox(box) {
+      const inset = 6;
+      const x = clamp(box.minX + inset, 0, naturalWidth - 1);
+      const y = clamp(box.minY + inset, 0, naturalHeight - 1);
+      const right = clamp(box.maxX - inset, x + 1, naturalWidth);
+      const bottom = clamp(box.maxY - inset, y + 1, naturalHeight);
+      return {
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+      };
+    }
+
+    function mergeSimilarBoxes(boxes) {
+      const merged = [];
+      const tolerance = 12;
+
+      boxes.forEach((box) => {
+        const existing = merged.find((candidate) =>
+          Math.abs(candidate.x - box.x) < tolerance &&
+          Math.abs(candidate.y - box.y) < tolerance &&
+          Math.abs(candidate.width - box.width) < tolerance &&
+          Math.abs(candidate.height - box.height) < tolerance
+        );
+
+        if (!existing) merged.push(box);
+      });
+
+      return merged;
+    }
+
+    function renderPreview() {
+      preview.innerHTML = "";
+      outputCanvas = buildOutputCanvas();
+      if (outputCanvas) preview.appendChild(outputCanvas);
+    }
+
+    function buildOutputCanvas() {
+      if (!imageLoaded || !selections.length) return null;
+
+      const gap = clamp(Number(gapInput.value) || 0, 0, 200);
+      const vertical = direction.value === "vertical";
+      const width = vertical
+        ? Math.max(...selections.map((rect) => rect.width))
+        : selections.reduce((sum, rect) => sum + rect.width, 0) + gap * (selections.length - 1);
+      const height = vertical
+        ? selections.reduce((sum, rect) => sum + rect.height, 0) + gap * (selections.length - 1)
+        : Math.max(...selections.map((rect) => rect.height));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = bgColor.value;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      let offset = 0;
+      selections.forEach((rect) => {
+        if (vertical) {
+          ctx.drawImage(sourceImage, rect.x, rect.y, rect.width, rect.height, 0, offset, rect.width, rect.height);
+          offset += rect.height + gap;
+        } else {
+          ctx.drawImage(sourceImage, rect.x, rect.y, rect.width, rect.height, offset, 0, rect.width, rect.height);
+          offset += rect.width + gap;
+        }
+      });
+
+      return canvas;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function setStatus(message, isError = false) {
+      status.textContent = message;
+      status.classList.toggle("error", isError);
+    }
+  </script>
+</body>
+</html>
